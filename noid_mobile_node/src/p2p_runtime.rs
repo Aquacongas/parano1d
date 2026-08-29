@@ -67,6 +67,9 @@ use crate::MobileNodeRuntime;
 
 const SCHEDULER_TICK_MS: u64 = 200;
 
+/// Same bounded proactive mempool bootstrap policy as the mainnet node.
+const MAX_MEMPOOL_SYNC_PEERS: usize = 4;
+
 #[derive(Debug, Clone, Copy)]
 pub struct MobileP2PStatusSnapshot {
     pub peers: usize,
@@ -257,6 +260,12 @@ pub struct MobileP2PRuntime {
 
     peers: Arc<RwLock<HashMap<PeerId, MobilePeer>>>,
 
+    /// Maintained outbound peers from which mempool bootstrap was requested.
+    ///
+    /// Mirrors the bounded mainnet-node policy: proactive mempool pulls are
+    /// issued only to locally selected peers, at most four per connection set.
+    mempool_sync_requested_peers: Mutex<std::collections::HashSet<PeerId>>,
+
     /// Initial state bootstrap state machine.
     bootstrap: Mutex<MobileBootstrapStage>,
 
@@ -301,6 +310,7 @@ impl MobileP2PRuntime {
             node,
             network,
             peers: Arc::new(RwLock::new(HashMap::new())),
+            mempool_sync_requested_peers: Mutex::new(std::collections::HashSet::new()),
             bootstrap: Mutex::new(MobileBootstrapStage::Idle),
             bootstrap_complete_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             snapshot_header_staging: Mutex::new(None),
@@ -1016,20 +1026,39 @@ impl MobileP2PRuntime {
 
                 // Bootstrap is finished; mempool synchronization may now use
                 // spare request capacity without competing with chain catch-up.
-                let peers = self
+                //
+                // Match the mainnet node policy:
+                // - proactive pulls only from locally selected peers;
+                // - remember peers already requested;
+                // - at most MAX_MEMPOOL_SYNC_PEERS.
+                let mut requested = self.mempool_sync_requested_peers.lock().await;
+                let remaining = MAX_MEMPOOL_SYNC_PEERS.saturating_sub(requested.len());
+
+                let mut peers = self
                     .peers
                     .read()
                     .await
-                    .keys()
-                    .copied()
-                    .take(4)
+                    .iter()
+                    .filter_map(|(peer, entry)| {
+                        (entry.locally_selected && !requested.contains(peer)).then_some(*peer)
+                    })
                     .collect::<Vec<_>>();
+
+                peers.sort_unstable_by_key(|peer| peer.to_bytes());
+                peers.truncate(remaining);
+
                 for peer in peers {
-                    let _ = self
+                    if self
                         .network
                         .cmd_tx
-                        .try_send(NetworkCommand::RequestMempoolSync { peer });
+                        .try_send(NetworkCommand::RequestMempoolSync { peer })
+                        .is_ok()
+                    {
+                        requested.insert(peer);
+                    }
                 }
+
+                drop(requested);
 
                 tracing::info!(local_height, "MOBILE INITIAL SYNC COMPLETE");
                 return Ok(());
@@ -1361,11 +1390,19 @@ impl MobileP2PRuntime {
                 let bootstrap_complete =
                     matches!(*self.bootstrap.lock().await, MobileBootstrapStage::Complete);
 
-                if bootstrap_complete {
-                    let _ = self
-                        .network
-                        .cmd_tx
-                        .try_send(NetworkCommand::RequestMempoolSync { peer });
+                if locally_selected && bootstrap_complete {
+                    let mut requested = self.mempool_sync_requested_peers.lock().await;
+
+                    if requested.len() < MAX_MEMPOOL_SYNC_PEERS
+                        && !requested.contains(&peer)
+                        && self
+                            .network
+                            .cmd_tx
+                            .try_send(NetworkCommand::RequestMempoolSync { peer })
+                            .is_ok()
+                    {
+                        requested.insert(peer);
+                    }
                 }
 
                 // Do not wait for the next block gossip before discovering
@@ -1443,6 +1480,8 @@ impl MobileP2PRuntime {
                 }
 
                 self.peers.write().await.remove(&peer);
+
+                self.mempool_sync_requested_peers.lock().await.remove(&peer);
 
                 publish_mobile_peer_count(self.peers.read().await.len());
 
