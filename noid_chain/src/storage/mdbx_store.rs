@@ -1447,11 +1447,17 @@ impl MdbxStore {
         //                        permanent indexes and B+tree overhead. This is
         //                        an address-space ceiling, not eager allocation.
         //   growth_step = 64 MB — incremental growth to avoid resize churn
+        #[cfg(target_os = "android")]
+        let max_map_size: isize = 64isize * 1024 * 1024 * 1024;
+
+        #[cfg(not(target_os = "android"))]
+        let max_map_size: isize = 1024isize * 1024 * 1024 * 1024;
+
         let rw = ReadWriteOptions {
             sync_mode: SyncMode::Durable,
-            min_size: Some(4 * 1024 * 1024),                // 4 MiB
-            max_size: Some(1024isize * 1024 * 1024 * 1024), // 1 TiB virtual ceiling
-            growth_step: Some(64 * 1024 * 1024),            // 64 MiB steps
+            min_size: Some(4 * 1024 * 1024), // 4 MiB
+            max_size: Some(max_map_size),
+            growth_step: Some(64 * 1024 * 1024), // 64 MiB steps
             ..Default::default()
         };
         let db = Database::<NoWriteMap>::open_with_options(

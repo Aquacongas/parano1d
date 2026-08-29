@@ -40,6 +40,20 @@ is an L1 whose age does not become a hardware requirement. Years later, an
 ordinary laptop can still hold the complete live state and independently
 verify the network without replaying the chain's lifetime.
 
+## ParanO1c by Aquacongas
+
+ParanO1c by Aquacongas is an experimental community-developed Android version
+of Parano1d, created to make the Parano1d wallet and node available on Android
+devices.
+
+The project is based directly on the Parano1d codebase and follows the upstream
+network and protocol while providing a dedicated mobile implementation for
+Android.
+
+ParanO1c is maintained by **Aquacongas** as a community project. It is not an
+official Parano1d release and has not undergone a completed independent
+security audit.
+
 ## The Fundamental Shift
 
 | | Conventional blockchain | Parano1d |
@@ -422,6 +436,66 @@ To reproduce the production soundness calculation, see
 
 ```sh
 cargo run --release --locked -p noid_soundness
+```
+
+### Building ParanO1c for Android
+
+ParanO1c currently targets Android ARM64 (`arm64-v8a`).
+
+Clone the repository and check out the release tag:
+
+```sh
+git clone https://github.com/Aquacongas/parano1d.git
+cd parano1d
+git checkout <release-tag>
+```
+
+Install the Android Rust target and `cargo-ndk`:
+
+```sh
+rustup target add aarch64-linux-android
+cargo install cargo-ndk
+```
+
+A working Android SDK and Android NDK installation are also required.
+
+Prepare the authenticated HistoryStep pack. The pack must be available at:
+
+```text
+release-assets/history-step/pack/history-step-pack-v1/
+```
+
+Export the HistoryStep build environment:
+
+```sh
+HISTORY_PACK_DIR="$PWD/release-assets/history-step/pack/history-step-pack-v1"
+
+set -a
+source "$HISTORY_PACK_DIR/pins.env"
+set +a
+
+export NOID_HISTORY_STEP_PACK_DIR="$HISTORY_PACK_DIR"
+```
+
+Build the Android ARM64 native library:
+
+```sh
+cargo ndk -t arm64-v8a \
+  -o android/app/src/main/jniLibs \
+  build --release -p noid_mobile_ffi
+```
+
+Build the Android release APK:
+
+```sh
+cd android
+./gradlew clean assembleRelease
+```
+
+The resulting APK is written to:
+
+```text
+android/app/build/outputs/apk/release/
 ```
 
 Designed and developed by **Ignotus Nemo**. Licensed under the

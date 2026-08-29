@@ -12,7 +12,7 @@ noid_tx = { path = "../noid_tx" }
 noid_fri = { path = "../noid_fri" }
 noid_fri_binius = { path = "../noid_fri_binius" }
 rayon = "1.10"
-libmdbx = "0.6"
+libmdbx = { workspace = true }
 bincode = "1"
 serde = { version = "1", features = ["derive"] }
 

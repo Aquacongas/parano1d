@@ -8,3 +8,22 @@
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# ParanO1c Android build outputs
+android/.gradle/
+android/app/build/
+android/app/src/main/jniLibs/
+
+# Android signing material
+android/*.jks
+android/*.keystore
+
+# Local Android configuration
+android/local.properties
+
+# Android packages
+*.apk
+*.aab
+
+# HistoryStep build artifacts
+release-assets/history-step/pack/

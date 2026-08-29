@@ -3685,14 +3685,21 @@ async fn run_swarm(
     let protocol_id = topics.protocol_id.clone();
     let network_profile = NetworkProfile::for_proof_bank(history_proof_bank_id);
     let public_relay_enabled = !public_addresses.is_empty();
-    let mut swarm = SwarmBuilder::with_existing_identity(identity)
+    let builder = SwarmBuilder::with_existing_identity(identity)
         .with_tokio()
         .with_tcp(
             tcp::Config::default().nodelay(true),
             noise::Config::new,
             yamux::Config::default,
-        )?
-        .with_dns()?
+        )?;
+
+    #[cfg(not(target_os = "android"))]
+    let builder = builder.with_dns()?;
+
+    #[cfg(target_os = "android")]
+    let builder = builder;
+
+    let mut swarm = builder
         // Relay client transport: enables dialling and listening through relay
         // nodes.  The relay::client::Behaviour is wired here by the builder
         // and passed into NodeBehaviour::new() via the closure below.

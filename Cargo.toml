@@ -13,6 +13,14 @@ members = [
     "noid_block",
     "noid_recursive",
     "noid_soundness",
+    # Mobile / Android
+    "noid_mobile_wallet",
+    "noid_mobile_node",
+    "noid_mobile_networking",
+    "noid_mobile_sync_apply",
+    "noid_mobile_history_runtime",
+    "noid_mobile_ffi",
+
     # Node Infrastructure
     "noid_mempool",
     "noid_miner",
@@ -31,6 +39,7 @@ edition = "2021"
 license = "Apache-2.0"
 
 [workspace.dependencies]
+libmdbx = { path = "vendor/libmdbx" }
 tokio       = { version = "1", features = ["full"] }
 tracing     = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
